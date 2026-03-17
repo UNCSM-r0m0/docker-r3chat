@@ -66,14 +66,17 @@ services:
       dockerfile: Dockerfile
     container_name: saas-ollama-proxy
     restart: unless-stopped
+    #network_mode: host
     environment:
       PORT: 8080
-      OLLAMA_TARGET: http://172.17.0.1:11434  # <-- AGREGAR ESTA LÍNEA
-      # Otras variables que necesite tu proxy
+      OLLAMA_TARGET: http://host.docker.internal:11434
+      OLLAMA_PROXY_API_KEY: ${OLLAMA_PROXY_API_KEY}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "127.0.0.1:8080:8080"
     networks:
-      - saas-network
+      - saas-network  # Volver a poner esto
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
       interval: 10s
