@@ -68,8 +68,8 @@ services:
     restart: unless-stopped
     environment:
       PORT: 8080
-      OLLAMA_TARGET: http://172.17.0.1:11434  # <-- AGREGAR ESTA LÍNEA
-      # Otras variables que necesite tu proxy
+      OLLAMA_TARGET: http://172.17.0.1:11434
+      OLLAMA_PROXY_API_KEY: ${OLLAMA_PROXY_API_KEY}
     ports:
       - "127.0.0.1:8080:8080"
     networks:
