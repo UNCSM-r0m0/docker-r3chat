@@ -1,0 +1,6 @@
+[submodule "saas-backend"]
+	path = saas-backend
+	url = https://github.com/UNCSM-r0m0/saas-backend.git
+[submodule "ollama-proxy"]
+	path = ollama-proxy
+	url = https://github.com/UNCSM-r0m0/ollama-proxy.git

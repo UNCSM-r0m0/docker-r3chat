@@ -1,0 +1,291 @@
+# =============================================================================
+# R3CHAT - Monorepo Docker
+# =============================================================================
+# Servicios: NATS, Postgres, Redis, Microservicios, Gateway, Cloudflare Tunnel
+# Requiere: .env en la raíz
+# =============================================================================
+
+version: "3.8"
+
+services:
+  # ==========================================================================
+  # INFRAESTRUCTURA
+  # ==========================================================================
+
+  nats:
+    image: nats:2.10-alpine
+    container_name: saas-nats
+    restart: unless-stopped
+    command: "-m 8222"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - saas-network
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: saas-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - saas-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: saas-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - saas-network
+
+  # ==========================================================================
+  # OLLAMA PROXY (Modelos Cloud)
+  # ==========================================================================
+  ollama-proxy:
+    build:
+      context: ./ollama-proxy
+      dockerfile: Dockerfile
+    container_name: saas-ollama-proxy
+    restart: unless-stopped
+    environment:
+      PORT: 8080
+      # Otras variables que necesite tu proxy
+    ports:
+      - "127.0.0.1:8080:8080"
+    networks:
+      - saas-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ==========================================================================
+  # MICROSERVICIOS (NestJS)
+  # ==========================================================================
+
+  auth:
+    build:
+      context: ./saas-backend
+      dockerfile: Dockerfile
+    container_name: saas-auth
+    restart: unless-stopped
+    command: npm run start:prod:auth
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      NATS_URL: ${NATS_URL}
+      HEALTH_CHECK_PORT: 3001
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION}
+    ports:
+      - "127.0.0.1:3001:3001"
+    networks:
+      - saas-network
+    depends_on:
+      nats:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  users:
+    build:
+      context: ./saas-backend
+      dockerfile: Dockerfile
+    container_name: saas-users
+    restart: unless-stopped
+    command: npm run start:prod:users
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      NATS_URL: ${NATS_URL}
+      HEALTH_CHECK_PORT: 3002
+    ports:
+      - "127.0.0.1:3002:3002"
+    networks:
+      - saas-network
+    depends_on:
+      nats:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  chat:
+    build:
+      context: ./saas-backend
+      dockerfile: Dockerfile
+    container_name: saas-chat
+    restart: unless-stopped
+    command: npm run start:prod:chat
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      NATS_URL: ${NATS_URL}
+      HEALTH_CHECK_PORT: 3003
+      OLLAMA_URL: http://ollama-proxy:8080
+      OLLAMA_PROXY_URL: http://ollama-proxy:8080
+      OLLAMA_PROXY_API_KEY: ${OLLAMA_PROXY_API_KEY}
+      OLLAMA_MODEL: ${OLLAMA_MODEL}
+      PUBLIC_MODELS: ${PUBLIC_MODELS}
+      PRO_MODELS: ${PRO_MODELS}
+      OLLAMA_FALLBACK_MODEL: ${OLLAMA_FALLBACK_MODEL}
+      CHAT_STREAM_BATCH_MS: ${CHAT_STREAM_BATCH_MS}
+      CHAT_STREAM_BATCH_TARGET_CHARS: ${CHAT_STREAM_BATCH_TARGET_CHARS}
+      CHAT_STREAM_BATCH_MIN_CHARS: ${CHAT_STREAM_BATCH_MIN_CHARS}
+    ports:
+      - "127.0.0.1:3003:3003"
+    networks:
+      - saas-network
+    depends_on:
+      nats:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ollama-proxy:
+        condition: service_healthy
+
+  billing:
+    build:
+      context: ./saas-backend
+      dockerfile: Dockerfile
+    container_name: saas-billing
+    restart: unless-stopped
+    command: npm run start:prod:billing
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      NATS_URL: ${NATS_URL}
+      HEALTH_CHECK_PORT: 3004
+    ports:
+      - "127.0.0.1:3004:3004"
+    networks:
+      - saas-network
+    depends_on:
+      nats:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  usage:
+    build:
+      context: ./saas-backend
+      dockerfile: Dockerfile
+    container_name: saas-usage
+    restart: unless-stopped
+    command: npm run start:prod:usage
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      NATS_URL: ${NATS_URL}
+      HEALTH_CHECK_PORT: 3005
+    ports:
+      - "127.0.0.1:3005:3005"
+    networks:
+      - saas-network
+    depends_on:
+      nats:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  # ==========================================================================
+  # GATEWAY (API Pública)
+  # ==========================================================================
+
+  gateway:
+    build:
+      context: ./saas-backend
+      dockerfile: Dockerfile
+    container_name: saas-gateway
+    restart: unless-stopped
+    command: npm run start:prod:gateway
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: ${DATABASE_URL}
+      NATS_URL: ${NATS_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION}
+      PUBLIC_URL: ${PUBLIC_URL}
+      FRONTEND_URL: ${FRONTEND_URL}
+      FRONTEND_URLS: ${FRONTEND_URLS}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
+      GITHUB_CALLBACK_URL: ${GITHUB_CALLBACK_URL}
+      OLLAMA_URL: http://ollama-proxy:8080
+      OLLAMA_PROXY_URL: http://ollama-proxy:8080
+      OLLAMA_PROXY_API_KEY: ${OLLAMA_PROXY_API_KEY}
+      PUBLIC_MODELS: ${PUBLIC_MODELS}
+      PRO_MODELS: ${PRO_MODELS}
+      OLLAMA_FALLBACK_MODEL: ${OLLAMA_FALLBACK_MODEL}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      STRIPE_PREMIUM_PRICE_ID: ${STRIPE_PREMIUM_PRICE_ID}
+    ports:
+      - "3000:3000"
+    networks:
+      - saas-network
+    depends_on:
+      nats:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ==========================================================================
+  # CLOUDFLARE TUNNEL
+  # ==========================================================================
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: r3chat-tunnel
+    restart: unless-stopped
+    command:
+      - tunnel
+      - --no-autoupdate
+      - run
+      - --token
+      - ${TUNNEL_TOKEN}
+    depends_on:
+      - gateway
+    networks:
+      - saas-network
+
+networks:
+  saas-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
