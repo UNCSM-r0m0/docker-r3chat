@@ -41,6 +41,10 @@ services:
     ports:
       - "127.0.0.1:3005:3005"
 
+  paypal:
+    ports:
+      - "127.0.0.1:3006:3006"
+
   # Base de datos: Puerto expuesto para herramientas locales (5433 para evitar conflicto con PostgreSQL nativo)
   postgres:
     ports:

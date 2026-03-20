@@ -213,6 +213,32 @@ services:
       postgres:
         condition: service_healthy
 
+  paypal:
+    build:
+      context: ./saas-backend
+      dockerfile: Dockerfile
+    container_name: saas-paypal
+    restart: unless-stopped
+    command: npm run start:prod:paypal
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      NATS_URL: ${NATS_URL}
+      HEALTH_CHECK_PORT: 3006
+      PAYPAL_CLIENT_ID: ${PAYPAL_CLIENT_ID}
+      PAYPAL_CLIENT_SECRET: ${PAYPAL_CLIENT_SECRET}
+      PAYPAL_ENVIRONMENT: ${PAYPAL_ENVIRONMENT:-sandbox}
+      PAYPAL_WEBHOOK_ID: ${PAYPAL_WEBHOOK_ID}
+    ports:
+      - "127.0.0.1:3006:3006"
+    networks:
+      - saas-network
+    depends_on:
+      nats:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
   # ==========================================================================
   # GATEWAY (API Pública)
   # ==========================================================================
@@ -266,25 +292,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-
-  # ==========================================================================
-  # CLOUDFLARE TUNNEL
-  # ==========================================================================
-
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    container_name: r3chat-tunnel
-    restart: unless-stopped
-    command:
-      - tunnel
-      - --no-autoupdate
-      - run
-      - --token
-      - ${TUNNEL_TOKEN}
-    depends_on:
-      - gateway
-    networks:
-      - saas-network
 
 networks:
   saas-network:
