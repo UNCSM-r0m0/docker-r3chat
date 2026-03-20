@@ -1,0 +1,32 @@
+{
+  "name": "r3chat-docker",
+  "version": "1.0.0",
+  "description": "Docker orchestration for R3Chat SaaS",
+  "private": true,
+  "scripts": {
+    "start:local": "docker-compose up -d",
+    "start:prod": "docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d",
+    "stop": "docker-compose down",
+    "restart": "docker-compose restart",
+    "logs": "docker-compose logs -f",
+    "logs:gateway": "docker-compose logs -f gateway",
+    "logs:auth": "docker-compose logs -f auth",
+    "logs:chat": "docker-compose logs -f chat",
+    "build": "docker-compose build",
+    "build:no-cache": "docker-compose build --no-cache",
+    "clean": "docker-compose down -v --remove-orphans",
+    "clean:all": "docker-compose down -v --remove-orphans --rmi all",
+    "ps": "docker-compose ps",
+    "health": "docker-compose ps && docker-compose logs --tail=20 gateway",
+    "update": "docker-compose pull && docker-compose up -d",
+    "shell:gateway": "docker-compose exec gateway sh",
+    "shell:db": "docker-compose exec postgres psql -U postgres -d saas_db",
+    "db:migrate": "cd saas-backend && npx prisma migrate deploy",
+    "db:studio": "cd saas-backend && npx prisma studio",
+    "db:seed": "cd saas-backend && npx ts-node prisma/seed.ts"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

@@ -1,0 +1,58 @@
+# ==========================================================================
+# R3CHAT - Docker Compose Override (Desarrollo Local)
+# ==========================================================================
+# Este archivo se aplica automáticamente al correr: docker-compose up -d
+# Solo contiene overrides para desarrollo local
+# ==========================================================================
+
+version: "3.8"
+
+services:
+  # Gateway: Expuesto a todas las IPs para desarrollo local
+  gateway:
+    ports:
+      - "0.0.0.0:3000:3000"
+    environment:
+      # Permitir CORS desde cualquier origen en desarrollo
+      CORS_ALLOW_ALL: "true"
+      # URLs de desarrollo
+      PUBLIC_URL: http://localhost:3000
+      FRONTEND_URL: http://localhost:5173
+      FRONTEND_URLS: http://localhost:5173,http://127.0.0.1:5173
+
+  # Microservicios: Puertos expuestos para debugging (opcional)
+  auth:
+    ports:
+      - "127.0.0.1:3001:3001"
+
+  users:
+    ports:
+      - "127.0.0.1:3002:3002"
+
+  chat:
+    ports:
+      - "127.0.0.1:3003:3003"
+
+  billing:
+    ports:
+      - "127.0.0.1:3004:3004"
+
+  usage:
+    ports:
+      - "127.0.0.1:3005:3005"
+
+  # Base de datos: Puerto expuesto para herramientas locales
+  postgres:
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  # Redis: Puerto expuesto para debugging
+  redis:
+    ports:
+      - "127.0.0.1:6379:6379"
+
+  # NATS: Puerto expuesto para debugging
+  nats:
+    ports:
+      - "127.0.0.1:4222:4222"
+      - "127.0.0.1:8222:8222"

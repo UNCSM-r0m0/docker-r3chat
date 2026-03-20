@@ -1,0 +1,26 @@
+# ==========================================================================
+# R3CHAT - Docker Compose Production
+# ==========================================================================
+# Usar con: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# Este archivo agrega el Cloudflare Tunnel para producción
+# ==========================================================================
+
+version: "3.8"
+
+services:
+  # Cloudflare Tunnel para exponer a internet
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: r3chat-tunnel
+    restart: unless-stopped
+    command:
+      - tunnel
+      - --no-autoupdate
+      - run
+      - --token
+      - ${TUNNEL_TOKEN}
+    depends_on:
+      gateway:
+        condition: service_healthy
+    networks:
+      - saas-network
