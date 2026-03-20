@@ -41,10 +41,10 @@ services:
     ports:
       - "127.0.0.1:3005:3005"
 
-  # Base de datos: Puerto expuesto para herramientas locales
+  # Base de datos: Puerto expuesto para herramientas locales (5433 para evitar conflicto con PostgreSQL nativo)
   postgres:
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:5433:5432"
 
   # Redis: Puerto expuesto para debugging
   redis:
