@@ -145,6 +145,7 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       NATS_URL: ${NATS_URL}
       HEALTH_CHECK_PORT: 3003
+      REDIS_URL: redis://redis:6379
       OLLAMA_URL: http://ollama-proxy:8080
       OLLAMA_PROXY_URL: http://ollama-proxy:8080
       OLLAMA_PROXY_API_KEY: ${OLLAMA_PROXY_API_KEY}

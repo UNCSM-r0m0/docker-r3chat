@@ -5,20 +5,18 @@
 # Solo contiene overrides para desarrollo local
 # ==========================================================================
 
-version: "3.8"
-
 services:
   # Gateway: Expuesto a todas las IPs para desarrollo local
   gateway:
     ports:
       - "0.0.0.0:3000:3000"
     environment:
-      # Permitir CORS desde cualquier origen en desarrollo
-      CORS_ALLOW_ALL: "true"
-      # URLs de desarrollo
-      PUBLIC_URL: http://localhost:3000
-      FRONTEND_URL: http://localhost:5173
-      FRONTEND_URLS: http://localhost:5173,http://127.0.0.1:5173
+      # Usar valores del .env (localhost por defecto, túnel si se configura)
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:3000}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      FRONTEND_URLS: ${FRONTEND_URLS:-http://localhost:5173,http://127.0.0.1:5173}
+      CORS_ALLOW_ALL: ${CORS_ALLOW_ALL:-true}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
 
   # Microservicios: Puertos expuestos para debugging (opcional)
   auth:
@@ -56,3 +54,21 @@ services:
     ports:
       - "127.0.0.1:4222:4222"
       - "127.0.0.1:8222:8222"
+
+  # ==========================================================================
+  # Cloudflare Tunnel - Expone el stack local a Internet
+  # ==========================================================================
+  # Este servicio crea un túnel seguro desde Cloudflare hasta tu máquina local
+  # Permite compartir la app con dominios reales durante desarrollo
+  # ==========================================================================
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: r3chat-tunnel
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    environment:
+      - CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    networks:
+      - saas-network
+    depends_on:
+      - gateway
