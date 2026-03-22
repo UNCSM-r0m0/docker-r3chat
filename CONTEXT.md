@@ -6,6 +6,41 @@
 
 ---
 
+## Estado Actual (22/03/2026)
+
+### ✅ Funcionando
+- **Cloudflare Tunnel:** Configurado y operativo
+- **Google OAuth:** Login funcional (secret corregido)
+- **Modelos Ollama:** Configurados y visibles para usuarios logueados
+- **WebSocket:** Conexiones activas
+- **E2EE:** Implementación lista (ECDH + AES-GCM)
+
+### URLs de Trabajo
+| Servicio | URL |
+|----------|-----|
+| Frontend | https://testr3.r0lm0.dev |
+| Backend API | https://apitest.r0lm0.dev/api |
+| WebSocket | wss://apitest.r0lm0.dev/chat |
+
+---
+
+## Configuración de Modelos Ollama
+
+**Archivo:** `.env` (docker-r3chat)
+
+```bash
+# Modelos disponibles en Ollama Cloud
+PUBLIC_MODELS=kimi-k2:1t-cloud
+PRO_MODELS=kimi-k2.5:cloud,kimi-k2-thinking,deepseek-v3.1:671b-cloud,minimax-m2:cloud,glm-5:cloud,qwen3-coder-next:cloud
+
+# Conexión
+OLLAMA_URL=http://host.docker.internal:11434
+```
+
+**Nota:** El endpoint `/api/models/available` ahora requiere autenticación JWT (cambio de seguridad).
+
+---
+
 ## Estructura del Proyecto
 
 ```
@@ -266,6 +301,9 @@ Verificar que:
 Frontend: Recargar Vite (detener y `npm run dev`)
 Backend: Reconstruir contenedores: `docker-compose up -d --build`
 
+### Google OAuth Error 401: invalid_client
+Verificar que `GOOGLE_CLIENT_SECRET` coincida exactamente con el JSON de credenciales de Google Cloud Console.
+
 ---
 
 ## Contacto / Repositorios
@@ -370,6 +408,23 @@ Infraestructura lista para encriptación end-to-end en chats usuario-usuario.
 
 ### Frontend Actualizado
 - `src/stores/index.ts` - Agregados exports faltantes
+
+---
+
+## 🔒 Seguridad: Endpoint de Modelos Privado (22/03/2026)
+
+**Cambio de seguridad importante:**
+
+| Antes | Después |
+|-------|---------|
+| `GET /api/models/public` | `GET /api/models/available` |
+| Público (sin auth) | Requiere JWT |
+
+**Motivo:** Los modelos Ollama son recursos valiosos. Evitar que no autenticados puedan ver/quemar tokens.
+
+**Commits:**
+- Backend: `af74c4c` - feat: add cache service, throttler, and security improvements
+- Frontend: `e87cd45` - config: update vite config and env for cloudflare tunnel deployment
 
 ---
 
@@ -552,4 +607,3 @@ Movidos de `src/` a `src/integrations/ai/`:
 | `integrations/*` | `src/integrations/` | APIs externas | - |
 
 Ver documentación completa en: `saas-backend/STRUCTURE.md`
-
