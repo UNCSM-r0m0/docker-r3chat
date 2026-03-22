@@ -93,7 +93,7 @@ services:
       dockerfile: Dockerfile
     container_name: saas-auth
     restart: unless-stopped
-    command: npm run start:prod:auth
+    command: node dist/apps/ms-auth/src/main.js
     environment:
       NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL}
@@ -115,9 +115,9 @@ services:
     build:
       context: ./saas-backend
       dockerfile: Dockerfile
-    container_name: saas-users
+    container_name: saas-ms-users
     restart: unless-stopped
-    command: npm run start:prod:users
+    command: node dist/apps/ms-users/src/main.js
     environment:
       NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL}
@@ -139,7 +139,7 @@ services:
       dockerfile: Dockerfile
     container_name: saas-chat
     restart: unless-stopped
-    command: npm run start:prod:chat
+    command: node dist/apps/ms-chat/src/main.js
     environment:
       NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL}
@@ -175,7 +175,7 @@ services:
       dockerfile: Dockerfile
     container_name: saas-billing
     restart: unless-stopped
-    command: npm run start:prod:billing
+    command: node dist/apps/ms-billing/src/main.js
     environment:
       NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL}
@@ -197,7 +197,7 @@ services:
       dockerfile: Dockerfile
     container_name: saas-usage
     restart: unless-stopped
-    command: npm run start:prod:usage
+    command: node dist/apps/ms-usage/src/main.js
     environment:
       NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL}
@@ -205,32 +205,6 @@ services:
       HEALTH_CHECK_PORT: 3005
     ports:
       - "127.0.0.1:3005:3005"
-    networks:
-      - saas-network
-    depends_on:
-      nats:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-
-  paypal:
-    build:
-      context: ./saas-backend
-      dockerfile: Dockerfile
-    container_name: saas-paypal
-    restart: unless-stopped
-    command: npm run start:prod:paypal
-    environment:
-      NODE_ENV: production
-      DATABASE_URL: ${DATABASE_URL}
-      NATS_URL: ${NATS_URL}
-      HEALTH_CHECK_PORT: 3006
-      PAYPAL_CLIENT_ID: ${PAYPAL_CLIENT_ID}
-      PAYPAL_CLIENT_SECRET: ${PAYPAL_CLIENT_SECRET}
-      PAYPAL_ENVIRONMENT: ${PAYPAL_ENVIRONMENT:-sandbox}
-      PAYPAL_WEBHOOK_ID: ${PAYPAL_WEBHOOK_ID}
-    ports:
-      - "127.0.0.1:3006:3006"
     networks:
       - saas-network
     depends_on:
@@ -249,7 +223,7 @@ services:
       dockerfile: Dockerfile
     container_name: saas-gateway
     restart: unless-stopped
-    command: npm run start:prod:gateway
+    command: node dist/src/main.js
     environment:
       NODE_ENV: production
       PORT: 3000
@@ -275,8 +249,8 @@ services:
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
       STRIPE_PREMIUM_PRICE_ID: ${STRIPE_PREMIUM_PRICE_ID}
-      PAYPAL_CLIENT_ID: ${PAYPAL_CLIENT_ID}
-      PAYPAL_ENVIRONMENT: ${PAYPAL_ENVIRONMENT:-sandbox}
+      LLM_STUDIO_BASE_URL: ${LLM_STUDIO_BASE_URL}
+      LLM_STUDIO_MODEL: ${LLM_STUDIO_MODEL}
     ports:
       - "3000:3000"
     networks:
