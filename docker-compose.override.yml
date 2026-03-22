@@ -56,18 +56,31 @@ services:
       - "127.0.0.1:8222:8222"
 
   # ==========================================================================
-  # Cloudflare Tunnel - Expone el stack local a Internet
+  # Cloudflare Tunnel - Docker (accede a servicios del host vía host.docker.internal)
   # ==========================================================================
-  # Este servicio crea un túnel seguro desde Cloudflare hasta tu máquina local
-  # Permite compartir la app con dominios reales durante desarrollo
+  # NOTA: Vite debe iniciarse con --host para escuchar en todas las interfaces:
+  #   npm run dev -- --host
+  #
+  # El túnel usa host.docker.internal para acceder a:
+  #   - host.docker.internal:5173 → Vite (frontend)
+  #   - host.docker.internal:3000 → Gateway (backend)
   # ==========================================================================
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: r3chat-tunnel
     restart: unless-stopped
-    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    # Usar host.docker.internal para acceder a servicios en el host Windows
+    command: >
+      tunnel 
+      --no-autoupdate 
+      run 
+      --token ${CLOUDFLARE_TUNNEL_TOKEN}
+      --url http://host.docker.internal:5173
     environment:
       - CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+      - TUNNEL_URL=http://host.docker.internal:5173
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - saas-network
     depends_on:

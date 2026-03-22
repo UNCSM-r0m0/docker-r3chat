@@ -1,0 +1,20 @@
+# Configuración de Cloudflare Tunnel para Docker Desktop (Windows/Mac)
+# Este archivo configura el túnel para acceder a servicios en el host
+# usando host.docker.internal
+
+tunnel: d1f191c8-42f6-4598-bf51-977b78a91895
+
+ingress:
+  - hostname: testr3.r0lm0.dev
+    service: http://host.docker.internal:5173
+    originRequest:
+      noTLSVerify: true
+      httpHostHeader: testr3.r0lm0.dev
+      
+  - hostname: apitest.r0lm0.dev
+    service: http://host.docker.internal:3000
+    originRequest:
+      noTLSVerify: true
+      httpHostHeader: apitest.r0lm0.dev
+      
+  - service: http_status:404
