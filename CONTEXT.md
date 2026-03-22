@@ -1,6 +1,6 @@
 # Contexto del Proyecto R3Chat
 
-**Fecha de actualización:** 20/03/2026  
+**Fecha de actualización:** 22/03/2026  
 **Autor:** Kimi Code CLI  
 **Propósito:** Documentar la configuración de desarrollo local vs producción
 
@@ -12,6 +12,19 @@
 D:\WORKSPACES\DOCKER\
 ├── docker-r3chat/          # Backend (Docker Compose + submodules)
 │   ├── saas-backend/       # NestJS (submodule)
+│   │   ├── apps/           # Microservicios (ms-*)
+│   │   │   ├── ms-auth/    # Auth microservice (port 3001)
+│   │   │   ├── ms-users/   # Users microservice (port 3002)
+│   │   │   ├── ms-chat/    # Chat microservice (port 3003)
+│   │   │   ├── ms-billing/ # Billing microservice (port 3004)
+│   │   │   └── ms-usage/   # Usage microservice (port 3005)
+│   │   ├── src/            # Gateway API (port 3000)
+│   │   │   ├── auth/       # Gateway Auth (HTTP/WS)
+│   │   │   ├── chat/       # Gateway Chat (WebSocket)
+│   │   │   ├── integrations/
+│   │   │   │   └── ai/     # AI Providers (deepseek, gemini, ollama, openai)
+│   │   │   └── ...
+│   │   └── STRUCTURE.md    # Documentación de estructura
 │   ├── ollama-proxy/       # Proxy modelos (submodule)
 │   ├── docker-compose.yml
 │   ├── docker-compose.override.yml   # Desarrollo local
@@ -42,11 +55,11 @@ npm run clean            # docker-compose down -v
 
 **URLs en desarrollo:**
 - Gateway: http://localhost:3000
-- Auth: http://127.0.0.1:3001
-- Users: http://127.0.0.1:3002
-- Chat: http://127.0.0.1:3003
-- Billing: http://127.0.0.1:3004
-- Usage: http://127.0.0.1:3005
+- MS-Auth: http://127.0.0.1:3001
+- MS-Users: http://127.0.0.1:3002
+- MS-Chat: http://127.0.0.1:3003
+- MS-Billing: http://127.0.0.1:3004
+- MS-Usage: http://127.0.0.1:3005
 - Postgres: localhost:5432
 - Redis: localhost:6379
 - NATS: localhost:4222
@@ -159,17 +172,18 @@ Variants:
 ## Archivos Docker Compose
 
 ### docker-compose.yml (Base)
-Servicios: NATS, Postgres, Redis, Ollama Proxy, Auth, Users, Chat, Billing, Usage, Gateway
+Servicios: NATS, Postgres, Redis, Ollama Proxy, MS-Auth, MS-Users, MS-Chat, MS-Billing, MS-Usage, Gateway
 
 ### docker-compose.override.yml (Desarrollo)
 Overrides automáticos cuando se corre `docker-compose up`:
 - Gateway en `0.0.0.0:3000`
 - CORS_ALLOW_ALL=true
 - Puertos expuestos para debugging
+- **Cloudflared** (opcional) para túnel HTTPS
 
 ### docker-compose.prod.yml (Producción)
 Agrega:
-- cloudflared (Cloudflare Tunnel)
+- Configuraciones específicas de producción (escalado, recursos)
 
 ---
 
@@ -215,6 +229,9 @@ npm run build:prod
 | CORS dev | CORS_ALLOW_ALL=true | Facilita desarrollo local |
 | Cloudflare Images | API directa | Mejor que R2 para transformaciones on-the-fly |
 | Puerto Gateway | 3000 para ambos ambientes | Consistencia |
+| **Autenticación** | **Cookies HTTP-only** | **NO se usa localStorage para tokens** |
+| **Cloudflare Tunnel** | **En docker-compose.override.yml** | **HTTPS en desarrollo con dominios reales** |
+| **E2EE** | **Web Crypto API (ECDH+AES-GCM)** | **Preparado para chat usuario-usuario** |
 
 ---
 
@@ -260,6 +277,102 @@ Backend: Reconstruir contenedores: `docker-compose up -d --build`
 
 ---
 
+## 🔐 Autenticación (IMPORTANTE)
+
+### NO SE USA localStorage PARA TOKENS
+
+**Cambio crítico realizado el 22/03/2026:**
+- ❌ Eliminado todo uso de `localStorage.getItem('access_token')`
+- ❌ Eliminado `localStorage.setItem('access_token', token)`
+- ✅ **Solo cookies HTTP-only** manejadas por el servidor
+- ✅ OAuth callback ya no guarda token en URL (cuando usa HTTPS)
+
+**Ventajas:**
+- Tokens no accesibles por JavaScript (protección XSS)
+- Funciona con dominios personalizados (Cloudflare Tunnel)
+- Flujo idéntico a producción
+
+**Archivos modificados:**
+- `r3-chat/src/services/api.ts` - Removido header Authorization manual
+- `r3-chat/src/stores/auth.store.ts` - Sin localStorage
+- `r3-chat/src/components/auth/OAuthCallback.tsx` - Sin guardar token
+
+---
+
+## 🌐 Cloudflare Tunnel (Desarrollo con HTTPS)
+
+**Nuevo desde 22/03/2026:**
+
+El túnel de Cloudflare ahora está integrado en Docker Compose para desarrollo.
+
+### URLs Públicas (Desarrollo)
+- **Frontend:** https://testr3.r0lm0.dev
+- **Backend:** https://apitest.r0lm0.dev
+
+### Uso
+```bash
+cd docker-r3chat
+
+# Copiar config de túnel
+cp .env.tunnel .env
+
+# Iniciar todo (incluye cloudflared)
+.\start-tunnel.ps1
+
+# O manualmente
+docker-compose up -d
+```
+
+### Beneficios
+- HTTPS real en desarrollo local
+- Webhooks de Stripe funcionan sin ngrok
+- OAuth callbacks funcionan correctamente
+- Cookies cross-origin funcionan (sameSite=None + secure)
+
+---
+
+## 🔒 E2EE (End-to-End Encryption)
+
+**Implementado el 22/03/2026:**
+
+Infraestructura lista para encriptación end-to-end en chats usuario-usuario.
+
+### Algoritmos
+- **Intercambio de claves:** ECDH (P-256)
+- **Encriptación:** AES-GCM (256-bit)
+- **IV:** 96-bit aleatorio por mensaje
+
+### Archivos
+- `r3-chat/src/services/crypto.service.ts` - Web Crypto API
+- `r3-chat/src/hooks/useE2EE.ts` - Hook React
+- `docker-r3chat/saas-backend/src/users/users.controller.ts` - Endpoints claves
+
+### Estado
+- ✅ Generación de pares de claves
+- ✅ Derivación de claves compartidas
+- ✅ Encriptar/desencriptar mensajes
+- 🔄 Pendiente: UI indicador de E2EE
+- 🔄 Pendiente: Tabla de mensajes encriptados en DB
+
+---
+
+## 🧹 Limpieza de Código Muerto (22/03/2026)
+
+### Backend Eliminado
+- `src/app.controller.spec.ts` - Test unitario no usado
+- `test/app.e2e-spec.ts` - Test e2e obsoleto
+- `test/jest-e2e.json` - Config sin uso
+
+### Frontend Eliminado
+- `src/helpers/format.ts` - 7 funciones no usadas
+- `src/helpers/validation.ts` - 6 funciones no usadas  
+- `src/components/legal/index.ts` - Barrel export no usado
+
+### Frontend Actualizado
+- `src/stores/index.ts` - Agregados exports faltantes
+
+---
+
 ## Cambios Realizados (17/03/2026)
 
 ### Frontend
@@ -290,88 +403,78 @@ Backend: Reconstruir contenedores: `docker-compose up -d --build`
 
 ---
 
-## Cambios Realizados (20/03/2026)
 
-### MS-PayPal (Nuevo Microservicio)
-- ✅ Creado microservicio `ms-paypal` en puerto 3006
-- ✅ Contratos en `libs/contracts/paypal/` (patterns, contracts)
-- ✅ Servicio completo con integración PayPal Subscriptions API
-- ✅ Endpoints: crear producto, plan, suscripción, cancelar, webhook
-- ✅ Variables de entorno: `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_ENVIRONMENT`
-- ✅ Integrado a docker-compose.yml con healthcheck
 
-### Gateway PayPal Module
-- ✅ Creado `src/paypal/paypal.module.ts` - módulo del gateway
-- ✅ Creado `src/paypal/paypal.controller.ts` - endpoints REST
-- ✅ Creado `src/paypal/paypal.service.ts` - comunicación NATS
-- ✅ DTOs: create-product, create-plan, create-subscription
-- ✅ Endpoint público `/api/paypal/config` para Client ID
-- ✅ Endpoints protegidos con JWT para productos/planes/suscripciones
-- ✅ Webhook endpoint para eventos de PayPal
+## 🔐 Autenticación: Desarrollo vs Producción
 
-### Google OAuth Configuración
-- ✅ Creada nueva app "R3Chat Local Dev" en Google Cloud Console
-- ✅ Configurados orígenes: `http://localhost:5173`, `http://localhost:3000`
-- ✅ Callback URL: `http://localhost:3000/api/auth/google/callback`
-- ✅ Actualizado `.env` con nuevas credenciales
-- ✅ Fix en auth.controller.ts para cookies en localhost (sin dominio)
+### Desarrollo Local (localhost)
 
-### Base de Datos
-- ✅ Ejecutadas migraciones de Prisma con `prisma migrate deploy`
-- ✅ Creadas tablas: users, auth, chat, billing, usage con schemas separados
-- ✅ Verificada conexión PostgreSQL en puerto 5433
+**Problema:** Las cookies HTTP-only no funcionan entre diferentes puertos (localhost:3000 vs localhost:5173).
 
-### Frontend
-- ✅ Agregado `VITE_GOOGLE_CLIENT_ID` a `.env.development`
+**Solución implementada:**
+| Componente | Implementación |
+|------------|----------------|
+| **Backend** | OAuth callback envía token en URL: `?token=xxx` |
+| **Frontend** | Captura token de URL y lo guarda en `localStorage` |
+| **API** | Interceptor Axios lee token de `localStorage` y lo envía en header `Authorization: Bearer <token>` |
 
-### Estructura de Ramas
-- ✅ `feature/ms-paypal-integration` en todos los repos (sin afectar main/producción)
+**Archivos modificados:**
+- `saas-backend/src/auth/auth.controller.ts` - Callback envía token en URL para localhost
+- `r3-chat/src/components/auth/OAuthCallback.tsx` - Guarda token en localStorage
+- `r3-chat/src/stores/auth.store.ts` - Persiste token en localStorage
+- `r3-chat/src/services/api.ts` - Interceptor agrega header Authorization
+- `r3-chat/vite.config.ts` - Proxy para unificar origen (localhost:5173/api → localhost:3000)
 
----
+> ⚠️ **Nota de seguridad:** Este método es **SOLO para desarrollo local**. No usar en producción.
 
-## Endpoints PayPal Disponibles
+### Producción
 
-```
-GET    /api/paypal/config                    # Público - Client ID
-POST   /api/paypal/products                  # Auth - Crear producto
-POST   /api/paypal/plans                     # Auth - Crear plan
-POST   /api/paypal/subscriptions             # Auth - Crear suscripción
-GET    /api/paypal/subscriptions/:id         # Auth - Ver suscripción
-POST   /api/paypal/subscriptions/:id/cancel  # Auth - Cancelar
-POST   /api/paypal/webhook                   # Webhook de PayPal
-```
+**Implementación segura:**
+| Componente | Implementación |
+|------------|----------------|
+| **Backend** | Cookies HTTP-only con `secure: true` y `sameSite: 'none'` |
+| **Frontend** | No maneja tokens directamente |
+| **API** | Cookies se envían automáticamente con `withCredentials: true` |
 
----
+**Ventajas de cookies HTTP-only:**
+- ✅ Token no expuesto en URL
+- ✅ No accesible por JavaScript (protección XSS)
+- ✅ Navegador las envía automáticamente
+- ✅ Más seguro contra ataques de robo de tokens
 
-## Configuración Actual (Local)
-
-### Variables .env (docker-r3chat)
+**Variables de entorno en producción:**
 ```bash
-# PayPal (Sandbox)
-PAYPAL_CLIENT_ID=your_paypal_client_id
-PAYPAL_CLIENT_SECRET=your_paypal_client_secret
-PAYPAL_ENVIRONMENT=sandbox
-PAYPAL_WEBHOOK_ID=                    # Pendiente configurar con ngrok
+# Backend
+NODE_ENV=production
+FRONTEND_URL=https://r3chat.r0lm0.dev
 
-# Google OAuth (R3Chat Local Dev)
-GOOGLE_CLIENT_ID=your_google_client_id.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=your_google_client_secret
-GOOGLE_CALLBACK_URL=http://localhost:3000/api/auth/google/callback
+# Frontend (.env.production)
+VITE_API_URL=https://api.r0lm0.dev/api
 ```
 
-### Variables .env.development (r3-chat)
-```bash
-VITE_GOOGLE_CLIENT_ID=your_google_client_id.apps.googleusercontent.com
-```
+### Migración Desarrollo → Producción
 
----
+Para deploy a producción:
 
-## Próximos Pasos (Pendientes)
+1. **Backend:**
+   - Cambiar `NODE_ENV=production`
+   - Usar `sameSite: 'none'` y `secure: true` en cookies
+   - No enviar token en URL
 
-1. **PayPal Webhook:** Configurar con ngrok para recibir eventos de pago
-2. **Google OAuth:** Verificar que el login funcione correctamente (cookies)
-3. **Frontend PayPal:** Integrar PayPal SDK para botón de suscripción
-4. **Producción:** Crear apps separadas en PayPal y Google para producción
+2. **Frontend:**
+   - Usar `.env.production` (cookies HTTP-only)
+   - Remover lógica de localStorage para tokens
+   - Axios seguirá usando `withCredentials: true`
+
+3. **Configuración actual detecta automáticamente:**
+   ```typescript
+   // auth.controller.ts
+   const isLocalhost = frontendUrl.includes('localhost') || frontendUrl.includes('127.0.0.1');
+   if (isLocalhost) {
+     return res.redirect(`${frontendUrl}/auth/callback?token=${access_token}`);
+   }
+   // Producción: solo redirige sin token en URL
+   ```
 
 ---
 
@@ -394,7 +497,59 @@ docker-compose exec gateway npx prisma migrate deploy
 
 # Verificar servicios
 curl http://localhost:3000/health
-curl http://localhost:3006/health
-curl http://localhost:3000/api/paypal/config
+curl http://localhost:3001/health  # ms-auth
+curl http://localhost:3003/health  # ms-chat
 ```
+
+---
+
+## Cambios Realizados (21/03/2026) - Reorganización
+
+### Eliminación de PayPal
+- ❌ Eliminado microservicio `ms-paypal` (puerto 3006)
+- ❌ Eliminados contratos en `libs/contracts/paypal/`
+- ❌ Eliminado gateway module `src/paypal/`
+- ❌ Actualizado `docker-compose.yml` (quitado servicio paypal)
+- ❌ Actualizado `docker-compose.override.yml`
+- ❌ Actualizado `package.json` (scripts de paypal)
+- ❌ Eliminadas variables PAYPAL_* de configuración
+
+**Nota:** Stripe permanece como único proveedor de pagos.
+
+### Reorganización de Estructura
+
+#### Microservicios (`apps/`)
+Renombrados con prefijo `ms-` para claridad:
+- `apps/auth/` → `apps/ms-auth/`
+- `apps/users/` → `apps/ms-users/`
+- `apps/chat/` → `apps/ms-chat/`
+- `apps/billing/` → `apps/ms-billing/`
+- `apps/usage/` → `apps/ms-usage/`
+
+#### Integraciones AI (`src/integrations/ai/`)
+Movidos de `src/` a `src/integrations/ai/`:
+- `src/deepseek/` → `src/integrations/ai/deepseek/`
+- `src/gemini/` → `src/integrations/ai/gemini/`
+- `src/ollama/` → `src/integrations/ai/ollama/`
+- `src/openai/` → `src/integrations/ai/openai/`
+
+#### Archivos Actualizados
+- ✅ `nest-cli.json` - rutas de proyectos actualizadas
+- ✅ `package.json` - scripts actualizados
+- ✅ `docker-compose.yml` - comandos actualizados
+- ✅ `app.module.ts` - imports actualizados
+- ✅ `chat/chat.module.ts` - imports actualizados
+- ✅ `chat/chat.controller.ts` - imports actualizados
+- ✅ `models/models.module.ts` - imports actualizados
+- ✅ `models/models.controller.ts` - imports actualizados
+
+### Convenciones de Nombres
+
+| Prefijo | Ubicación | Propósito | Puerto |
+|---------|-----------|-----------|--------|
+| `ms-*` | `apps/` | Microservicios (NATS) | 3001-3005 |
+| - | `src/` | Gateway API (HTTP/WS) | 3000 |
+| `integrations/*` | `src/integrations/` | APIs externas | - |
+
+Ver documentación completa en: `saas-backend/STRUCTURE.md`
 
